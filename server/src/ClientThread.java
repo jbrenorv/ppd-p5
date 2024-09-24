@@ -7,12 +7,8 @@ import javax.json.*;
 
 import models.Contact;
 import models.MessageType;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 public class ClientThread extends Thread {
-
-    private static final Logger logger = LogManager.getLogger();
 
     private final PrintStream printStream;
     private final BufferedReader reader;
@@ -24,12 +20,12 @@ public class ClientThread extends Thread {
 
     public void run() {
 
-        logger.info("Client thread started!");
+        Logger.info("Client thread started");
 
-        // Notifies the client that the channel is available
-        printStream.println("available");
+        Logger.info("Sending current contacts");
+        sendContacts(MainServer.getContacts());
 
-        logger.info("Waiting for client messages...");
+        Logger.info("Waiting for client messages...");
 
         while (true) {
             try {
@@ -37,19 +33,19 @@ public class ClientThread extends Thread {
                 // Wait for messages
                 String message = reader.readLine();
 
-                logger.info("Message received from socket: {}", message);
+                Logger.info("Message received from socket: " + message);
 
                 handleClientMessage(message);
 
             } catch (Exception e) {
-                logger.error(e.getMessage());
+                Logger.error(e.getMessage());
                 break;
             }
         }
 
-        RemoteServer.removeCallback(this::onContactsListChanged);
+        MainServer.removeCallback(this::onContactsListChanged);
 
-        logger.info("Client thread stopped!");
+        Logger.info("Client thread stopped!");
     }
 
     public void onContactsListChanged(Collection<Contact> contacts) {
@@ -66,8 +62,8 @@ public class ClientThread extends Thread {
                 createContact(jsonObject.getJsonObject("contact"));
                 break;
 
-            case getContacts:
-                sendContacts(RemoteServer.getContacts());
+            case contactsList:
+                receiveContactsList(jsonObject.getJsonArray("contacts"));
                 break;
 
             default:
@@ -76,34 +72,23 @@ public class ClientThread extends Thread {
     }
 
     private void createContact(JsonObject jsonObject) {
-        Contact contact = Contact.createClientFromJsonObject(jsonObject);
+        Contact contact = JsonUtils.buildContact(jsonObject);
 
-        RemoteServer.createContact(contact);
+        MainServer.createContact(contact);
 
-        logger.info("Successfully created client: {}", contact.getName());
+        Logger.info("Successfully created client: " + contact.getName());
     }
 
-    private String getContactsJsonString(Collection<Contact> contacts) {
-        JsonObjectBuilder builder = Json.createObjectBuilder();
-
-        builder.add("messageType", MessageType.contactsList.ordinal());
-
-        JsonArrayBuilder jsonArrayBuilder = Json.createArrayBuilder();
-
-        for (Contact contact : contacts) {
-            JsonObject clientJsonObject = contact.toJsonObject();
-            jsonArrayBuilder.add(clientJsonObject);
+    private void receiveContactsList(JsonArray contacts) {
+        for (Contact contact : JsonUtils.buildContacts(contacts)) {
+            MainServer.createContact(contact);
         }
-
-        builder.add("contacts", jsonArrayBuilder.build());
-
-        return builder.build().toString();
     }
 
     private void sendContacts(Collection<Contact> contacts) {
-        logger.info("Sending contacts list");
+        Logger.info("Sending contacts list");
 
-        String contactsJsonString = getContactsJsonString(contacts);
+        String contactsJsonString = JsonUtils.buildContactsJson(contacts);
 
         printStream.println(contactsJsonString);
     }

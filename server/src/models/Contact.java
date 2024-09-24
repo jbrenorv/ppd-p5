@@ -1,29 +1,12 @@
 package models;
 
-import javax.json.Json;
-import javax.json.JsonObject;
-import javax.json.JsonObjectBuilder;
-
 public class Contact {
     private final String name;
     private final String phone;
 
-    private Contact(String name, String phone) {
+    public Contact(String name, String phone) {
         this.name = name;
         this.phone = phone;
-    }
-
-    public static Contact createClientFromJsonObject(JsonObject jsonObject) {
-        return new Contact(jsonObject.getString("name"), jsonObject.getString("phone"));
-    }
-
-    public JsonObject toJsonObject() {
-        JsonObjectBuilder jsonObjectBuilder = Json.createObjectBuilder();
-
-        jsonObjectBuilder.add("name", this.name);
-        jsonObjectBuilder.add("phone", this.phone);
-
-        return jsonObjectBuilder.build();
     }
 
     public String getName() {

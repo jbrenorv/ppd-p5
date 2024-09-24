@@ -1,6 +1,6 @@
 public class Main {
     public static void main(String[] args) {
 
-        RemoteServer.startServer();
+        MainServer.startServer(args);
     }
 }
