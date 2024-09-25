@@ -1,34 +1,52 @@
 import java.io.IOException;
 import java.net.*;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Consumer;
 
 import models.Contact;
+import models.ContactsListChangedEvent;
 
 public class MainServer {
 
-    private static final Set<Contact> contacts = new HashSet<>();
+    private static final Map<Long, Contact> _contacts = new HashMap<>();
 
-    private static final Set<Consumer<Collection<Contact>>> callbacks = new HashSet<>();
+    private static final Set<Consumer<ContactsListChangedEvent>> _callbacks = new HashSet<>();
 
     public static synchronized void createContact(Contact contact) {
-        contacts.add(contact);
+        _contacts.put(contact.getId(), contact);
+        notifyChanges(false);
+    }
 
-        for (Consumer<Collection<Contact>> callback : callbacks) {
-            callback.accept(contacts);
+    public static synchronized void updateContacts(Collection<Contact> contacts) {
+        for (Contact contact : contacts) {
+            _contacts.put(contact.getId(), contact);
         }
+        notifyChanges(true);
     }
 
     public static synchronized Collection<Contact> getContacts() {
-        return contacts;
+        return _contacts.values();
     }
 
-    public static synchronized void removeCallback(Consumer<Collection<Contact>> callback) {
-        callbacks.remove(callback);
+    public static synchronized void deleteContact(Contact contact) {
+        _contacts.remove(contact.getId());
+        notifyChanges(false);
+    }
+
+    public static synchronized void updateContact(Contact contact) {
+        _contacts.put(contact.getId(), contact);
+        notifyChanges(false);
+    }
+
+    public static synchronized void removeCallback(Consumer<ContactsListChangedEvent> callback) {
+        _callbacks.remove(callback);
+    }
+
+    private static void notifyChanges(boolean wasChangedByOtherServer) {
+        for (Consumer<ContactsListChangedEvent> callback : _callbacks) {
+            callback.accept(new ContactsListChangedEvent(wasChangedByOtherServer, _contacts.values()));
+        }
     }
 
     public static void startServer(String[] args) {
@@ -45,7 +63,7 @@ public class MainServer {
             while (true) {
                 
                 Socket socket = serverSocket.accept();
-                createClientThread(socket);
+                createClientThread(socket, false);
 
             }
         } catch (IOException e) {
@@ -60,7 +78,7 @@ public class MainServer {
             try {
 
                 Socket socket = new Socket("localhost", port);
-                createClientThread(socket);
+                createClientThread(socket, true);
 
             } catch (IOException e) {
                 Logger.error("Error connecting to other server instance: " + e.getMessage());
@@ -68,14 +86,14 @@ public class MainServer {
         }
     }
 
-    private static void createClientThread(Socket socket) {
+    private static void createClientThread(Socket socket, boolean isOtherServerInstance) {
         Logger.info("New client connected");
         Logger.info("Creating client thread");
 
         try {
 
-            ClientThread clientThread = new ClientThread(socket);
-            callbacks.add(clientThread::onContactsListChanged);
+            ClientThread clientThread = new ClientThread(socket, isOtherServerInstance);
+            _callbacks.add(clientThread::onContactsListChanged);
             clientThread.start();
 
         } catch (IOException e) {

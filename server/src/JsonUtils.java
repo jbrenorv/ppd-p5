@@ -8,12 +8,13 @@ import java.util.stream.Collectors;
 public class JsonUtils {
 
     public static Contact buildContact(JsonObject contactJson) {
-        return new Contact(contactJson.getString("name"), contactJson.getString("phone"));
+        return new Contact(contactJson.getInt("id"), contactJson.getString("name"), contactJson.getString("phone"));
     }
 
     public static JsonObject buildContactJson(Contact contact) {
         JsonObjectBuilder jsonObjectBuilder = Json.createObjectBuilder();
 
+        jsonObjectBuilder.add("id", contact.getId());
         jsonObjectBuilder.add("name", contact.getName());
         jsonObjectBuilder.add("phone", contact.getPhone());
 

@@ -6,14 +6,17 @@ import java.util.Collection;
 import javax.json.*;
 
 import models.Contact;
+import models.ContactsListChangedEvent;
 import models.MessageType;
 
 public class ClientThread extends Thread {
 
+    private final boolean _isOtherServerInstance;
     private final PrintStream printStream;
     private final BufferedReader reader;
 
-    public ClientThread(Socket socket) throws IOException {
+    public ClientThread(Socket socket, boolean isOtherServerInstance) throws IOException {
+        this._isOtherServerInstance = isOtherServerInstance;
         this.reader = new BufferedReader(new InputStreamReader(socket.getInputStream(), StandardCharsets.UTF_8));
         this.printStream = new PrintStream(socket.getOutputStream(), true, StandardCharsets.UTF_8);
     }
@@ -22,8 +25,9 @@ public class ClientThread extends Thread {
 
         Logger.info("Client thread started");
 
-        Logger.info("Sending current contacts");
-        sendContacts(MainServer.getContacts());
+        if (!_isOtherServerInstance) {
+            sendContacts(MainServer.getContacts());
+        }
 
         Logger.info("Waiting for client messages...");
 
@@ -48,8 +52,9 @@ public class ClientThread extends Thread {
         Logger.info("Client thread stopped!");
     }
 
-    public void onContactsListChanged(Collection<Contact> contacts) {
-        sendContacts(contacts);
+    public void onContactsListChanged(ContactsListChangedEvent event) {
+        if (_isOtherServerInstance && event.wasChangedByOtherServer()) return;
+        sendContacts(event.contacts());
     }
 
     private void handleClientMessage(String message) {
@@ -66,6 +71,14 @@ public class ClientThread extends Thread {
                 receiveContactsList(jsonObject.getJsonArray("contacts"));
                 break;
 
+            case deleteContact:
+                deleteContact(jsonObject.getJsonObject("contact"));
+                break;
+
+            case updateContact:
+                updateContact(jsonObject);
+                break;
+
             default:
                 break;
         }
@@ -76,13 +89,28 @@ public class ClientThread extends Thread {
 
         MainServer.createContact(contact);
 
-        Logger.info("Successfully created client: " + contact.getName());
+        Logger.info("Successfully created contact: " + contact.getName());
     }
 
     private void receiveContactsList(JsonArray contacts) {
-        for (Contact contact : JsonUtils.buildContacts(contacts)) {
-            MainServer.createContact(contact);
-        }
+        Logger.info("Receiving contacts list from other server instance");
+        MainServer.updateContacts(JsonUtils.buildContacts(contacts));
+    }
+
+    private void deleteContact(JsonObject jsonObject) {
+        Contact contact = JsonUtils.buildContact(jsonObject);
+
+        MainServer.deleteContact(contact);
+
+        Logger.info("Successfully deleted contact: " + contact.getName());
+    }
+
+    private void updateContact(JsonObject jsonObject) {
+        Contact contact = JsonUtils.buildContact(jsonObject.getJsonObject("contact"));
+
+        MainServer.updateContact(contact);
+
+        Logger.info("Successfully updated contact: " + contact.getName());
     }
 
     private void sendContacts(Collection<Contact> contacts) {
